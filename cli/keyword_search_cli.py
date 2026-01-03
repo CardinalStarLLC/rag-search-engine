@@ -6,6 +6,7 @@ import string
 from nltk.stem import PorterStemmer
 # imports for InvertedIndex
 from typing import List, Dict, Any, Set, Iterable
+from collections import Counter
 import pickle
 import os
 
@@ -29,13 +30,19 @@ def tokenize(text: str):
     translation_table = str.maketrans("", "", string.punctuation)
 
     tokens = text.lower().translate(translation_table).split()
-    tokens = remove_stop_words(tokens)
-    return convert_to_stem_words(tokens)
+    valid_tokens = []
+    for token in tokens:
+        if token in stop_words_list:
+            continue
+        stem_word = stemmer.stem(token)
+        valid_tokens.append(stem_word)
+    return valid_tokens
 
 class InvertedIndex:
     def __init__(self) -> None:
         self.index: Dict[str, Set[int]] = {}
         self.docmap: Dict[int, Any] = {}
+        self.term_frequencies: Dict[int, Counter] = {}
 
     def __add_document(self, doc_id: int, text: str) -> None:
         # Tokenize text, then add each token to index with document ID
@@ -46,18 +53,30 @@ class InvertedIndex:
         tokens = tokenize(text)
 
         # Add tokens to index
+        # Also build term frequencies
+        term_freq = Counter()
+        
         for token in tokens:
             index = self.index.get(token)
             if index is None:
                 index = set()
                 self.index[token] = index
             index.add(doc_id)
+            term_freq[token] += 1
+        self.term_frequencies[doc_id] = term_freq
 
     def get_documents(self, term: str) -> List[int]:
         # Set the document ID for a given token
         # return as a list sorted in asc order
         doc_id_list = self.index.get(term.lower())
         return sorted(doc_id_list)
+    
+    def get_tf(self, doc_id, term) -> int:
+        tokens = term.split()
+        if len(tokens) > 1:
+            raise ValueError("Only one word allowed for the parameter 'term'")
+        term_freq = self.term_frequencies[doc_id]
+        return term_freq[term]
 
     def build(self) -> None:
         # Iterate over all movies and add them to both index and docmap
@@ -82,9 +101,10 @@ class InvertedIndex:
         # Store data (serialize)
         with open('cache/index.pkl', 'wb') as handle:
             pickle.dump(self.index, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
         with open('cache/docmap.pkl', 'wb') as handle:
             pickle.dump(self.docmap, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        with open('cache/term_frequencies.pkl', 'wb') as handle:
+            pickle.dump(self.term_frequencies, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     def load(self):
         # load using picke.load
@@ -93,12 +113,14 @@ class InvertedIndex:
                 self.index = pickle.load(handle)
             with open('cache/docmap.pkl', 'rb') as handle:
                 self.docmap = pickle.load(handle)
+            with open('cache/term_frequencies.pkl', 'rb') as handle:
+                self.term_frequencies = pickle.load(handle)
         except Exception as e:
             print(e)
     pass
 
 def main() -> None:
-
+    
     parser = argparse.ArgumentParser(description="Keyword Search CLI")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
@@ -107,8 +129,18 @@ def main() -> None:
 
     subparsers.add_parser("build", help="Generates inverted indexes for movies")
 
+    term_freq_parser = subparsers.add_parser("tf", help="Get the term frequency in a document")
+    term_freq_parser.add_argument("doc_id", type=int, help="Document id")
+    term_freq_parser.add_argument("term", type=str, help="Lookup term")
+
     # Create an instance of InvertedIndex
     ii = InvertedIndex()
+
+    try:
+        ii.load()
+        data = ii.index
+    except Exception as e:
+        print(e)
 
     # Load stop words (sets module-level `stop_words_list`)
     load_stop_words()
@@ -119,12 +151,6 @@ def main() -> None:
         case "search":
             # print the search query here
             print("Searching for: " + args.query)
-
-            try:
-                ii.load()
-                data = ii.index
-            except Exception as e:
-                print(e)
 
             max_results = 5
 
@@ -141,6 +167,11 @@ def main() -> None:
                     print(result_list)
                 except Exception as e:
                     print(f"No results found for token '{token}'")
+        case "tf":
+            term = args.term
+            doc_id = args.doc_id
+            print(f"Term frequency for '{term}' in document {doc_id}")
+            print(ii.get_tf(doc_id, term))
         case "build":
             ii.build()
         case _:
