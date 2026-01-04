@@ -7,7 +7,7 @@ import string
 from nltk.stem import PorterStemmer
 # imports for InvertedIndex
 from typing import List, Dict, Any, Set, Iterable
-from collections import Counter
+from collections import Counter, defaultdict
 import pickle
 import os
 
@@ -33,7 +33,7 @@ def tokenize(text: str):
 
 class InvertedIndex:
     def __init__(self) -> None:
-        self.index: Dict[str, Set[int]] = {}
+        self.index = defaultdict(set)
         self.docmap: Dict[int, Any] = {}
         self.term_frequencies: Dict[int, Counter] = {}
 
@@ -68,6 +68,11 @@ class InvertedIndex:
             raise ValueError("Only one word allowed for the parameter 'term'")
         term_freq = self.term_frequencies[doc_id]
         return term_freq[term]
+    
+    def get_idf(self, term) -> float:
+        documents = self.get_documents(term)
+        idf = math.log((len(self.docmap) + 1) / (len(documents) + 1))
+        return idf
 
     def build(self) -> None:
         # Iterate over all movies and add them to both index and docmap
@@ -127,6 +132,10 @@ def main() -> None:
     inverse_document_frequency_parser = subparsers.add_parser("idf", help="Get the inverse document frequency for a term")
     inverse_document_frequency_parser.add_argument("term", type=str, help="Lookup term")
 
+    tfidf_parser = subparsers.add_parser("tfidf", help="Get the TF-IDF for a term in a document")
+    tfidf_parser.add_argument("doc_id", type=int, help="Document id")
+    tfidf_parser.add_argument("term", type=str, help="Lookup term")
+
     # Create an instance of InvertedIndex
     ii = InvertedIndex()
 
@@ -140,6 +149,13 @@ def main() -> None:
     load_stop_words()
 
     args = parser.parse_args()
+    
+    if args.term is not None:
+        term = args.term.lower()
+        term = stemmer.stem(term)
+
+    if args.doc_id is not None:
+        doc_id = args.doc_id
 
     match args.command:
         case "search":
@@ -157,22 +173,24 @@ def main() -> None:
                         if len(result_list) >= max_results:
                             break
                         result_list.append((doc_id, ii.docmap[doc_id]))
+                        print((doc_id, ii.docmap[doc_id]))
 
-                    print(result_list)
+                    # print(result_list)
                 except Exception as e:
                     print(f"No results found for token '{token}'")
         case "tf":
-            term = args.term
-            stemmed_term = stemmer.stem(term)
-            doc_id = args.doc_id
             print(f"Term frequency for '{term}' in document {doc_id}")
-            print(ii.get_tf(doc_id, stemmed_term))
+            print(ii.get_tf(doc_id, term))
         case "idf":
-            term = args.term
-            stemmed_term = stemmer.stem(term)
-            documents = ii.get_documents(stemmed_term)
-            idf = math.log((len(ii.docmap) + 1) / (len(documents) + 1))
+            idf = ii.get_idf(term)
             print(f"Inverse document frequency of '{term}': {idf:.2f}")
+        case "tfidf":
+            tf = ii.get_tf(doc_id, term)
+            print(f"Term frequency for '{term}' in document {doc_id}")
+            idf = ii.get_idf(term)
+            print(f"Inverse document frequency of '{term}': {idf:.2f}")
+            tf_idf = tf * idf
+            print(f"TF-IDF score of '{term}' in document '{doc_id}': {tf_idf:.2f}")
         case "build":
             ii.build()
         case _:
