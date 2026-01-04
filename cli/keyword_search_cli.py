@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import math
 import string
 from nltk.stem import PorterStemmer
 # imports for InvertedIndex
@@ -17,14 +18,6 @@ def load_stop_words():
     with open('data/stopwords.txt', 'r') as file:
         stop_words_list = file.read().splitlines()
         return stop_words_list
-
-def remove_stop_words(word_list):
-    return list(set(word_list).difference(stop_words_list))
-
-def convert_to_stem_words(word_list):
-    stem_words = [stemmer.stem(word) for word in word_list]
-
-    return stem_words
 
 def tokenize(text: str):
     translation_table = str.maketrans("", "", string.punctuation)
@@ -57,11 +50,7 @@ class InvertedIndex:
         term_freq = Counter()
         
         for token in tokens:
-            index = self.index.get(token)
-            if index is None:
-                index = set()
-                self.index[token] = index
-            index.add(doc_id)
+            self.index[token].add(doc_id)
             term_freq[token] += 1
         self.term_frequencies[doc_id] = term_freq
 
@@ -69,6 +58,8 @@ class InvertedIndex:
         # Set the document ID for a given token
         # return as a list sorted in asc order
         doc_id_list = self.index.get(term.lower())
+        if doc_id_list is None:
+            return []
         return sorted(doc_id_list)
     
     def get_tf(self, doc_id, term) -> int:
@@ -82,9 +73,9 @@ class InvertedIndex:
         # Iterate over all movies and add them to both index and docmap
         with open('data/movies.json', 'r') as file:
             data = json.load(file)
-            data = sorted(data['movies'], key=lambda k: k['id'])
+            #data = sorted(data['movies'], key=lambda k: k['id'])
 
-            for m in data:
+            for m in data['movies']:
                 concat = f"{m['title']} {m['description']}"
                 self.__add_document(int(m['id']), concat)
 
@@ -133,6 +124,9 @@ def main() -> None:
     term_freq_parser.add_argument("doc_id", type=int, help="Document id")
     term_freq_parser.add_argument("term", type=str, help="Lookup term")
 
+    inverse_document_frequency_parser = subparsers.add_parser("idf", help="Get the inverse document frequency for a term")
+    inverse_document_frequency_parser.add_argument("term", type=str, help="Lookup term")
+
     # Create an instance of InvertedIndex
     ii = InvertedIndex()
 
@@ -169,9 +163,16 @@ def main() -> None:
                     print(f"No results found for token '{token}'")
         case "tf":
             term = args.term
+            stemmed_term = stemmer.stem(term)
             doc_id = args.doc_id
             print(f"Term frequency for '{term}' in document {doc_id}")
-            print(ii.get_tf(doc_id, term))
+            print(ii.get_tf(doc_id, stemmed_term))
+        case "idf":
+            term = args.term
+            stemmed_term = stemmer.stem(term)
+            documents = ii.get_documents(stemmed_term)
+            idf = math.log((len(ii.docmap) + 1) / (len(documents) + 1))
+            print(f"Inverse document frequency of '{term}': {idf:.2f}")
         case "build":
             ii.build()
         case _:
