@@ -11,6 +11,7 @@ from collections import Counter, defaultdict
 import pickle
 import os
 
+BM25_K1 = 1.5
 stemmer = PorterStemmer()
 
 def load_stop_words():
@@ -63,6 +64,11 @@ class InvertedIndex:
         df = len(term_docs)
         idf = math.log((doc_count - df + 0.5) / (df + 0.5) + 1)
         return idf
+    
+    def get_bm25_tf(self, doc_id, term, k1=BM25_K1):
+        tf = self.get_tf(doc_id, term)
+        bm25_tf = (tf * (k1 + 1)) / (tf + k1)
+        return bm25_tf
 
     # Get list of document IDs for a given term
     def get_documents(self, term: str) -> List[int]:
@@ -152,6 +158,13 @@ def main() -> None:
     bm25_idf_parser = subparsers.add_parser("bm25idf", help="Get BM25 IDF score for a given term")
     bm25_idf_parser.add_argument("term", type=str, help="Term to get BM25 IDF score for")
 
+    bm25_tf_parser = subparsers.add_parser(
+    "bm25tf", help="Get BM25 TF score for a given document ID and term"
+    )
+    bm25_tf_parser.add_argument("doc_id", type=int, help="Document ID")
+    bm25_tf_parser.add_argument("term", type=str, help="Term to get BM25 TF score for")
+    bm25_tf_parser.add_argument("k1", type=float, nargs='?', default=BM25_K1, help="Tunable BM25 K1 parameter")
+
     # Create an instance of InvertedIndex
     ii = InvertedIndex()
 
@@ -166,9 +179,12 @@ def main() -> None:
 
     args = parser.parse_args()
     
-    if args.term is not None:
+    try:
         term = args.term.lower()
         term = stemmer.stem(term)
+    except:
+        # do nothing
+        pass
 
     try:
         doc_id = args.doc_id
@@ -195,12 +211,18 @@ def main() -> None:
                         print((doc_id, ii.docmap[doc_id]))
                 except Exception as e:
                     print(f"No results found for token '{token}'")
-        case "tf":
-            print(f"Term frequency for '{term}' in document {doc_id}")
-            print(ii.get_tf(doc_id, term))
+        case "bm25idf":
+            bm25idf = ii.get_bm25_idf(term)
+            print(f"BM25 IDF score of '{args.term}': {bm25idf:.2f}")
+        case "bm25tf":
+            bm25tf = ii.get_bm25_tf(doc_id, term, args.k1)
+            print(f"BM25 TF score of '{args.term}' in document '{args.doc_id}': {bm25tf:.2f}")
         case "idf":
             idf = ii.get_idf(term)
             print(f"Inverse document frequency of '{term}': {idf:.2f}")
+        case "tf":
+            print(f"Term frequency for '{term}' in document {doc_id}")
+            print(ii.get_tf(doc_id, term))
         case "tfidf":
             tf = ii.get_tf(doc_id, term)
             print(f"Term frequency for '{term}' in document {doc_id}")
@@ -208,9 +230,6 @@ def main() -> None:
             print(f"Inverse document frequency of '{term}': {idf:.2f}")
             tf_idf = tf * idf
             print(f"TF-IDF score of '{term}' in document '{doc_id}': {tf_idf:.2f}")
-        case "bm25idf":
-            bm25idf = ii.get_bm25_idf(term)
-            print(f"BM25 IDF score of '{args.term}': {bm25idf:.2f}")
         case "build":
             ii.build()
         case _:
