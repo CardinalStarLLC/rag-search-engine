@@ -37,6 +37,7 @@ class InvertedIndex:
         self.docmap: Dict[int, Any] = {}
         self.term_frequencies: Dict[int, Counter] = {}
 
+    # Add a document to the index
     def __add_document(self, doc_id: int, text: str) -> None:
         # Tokenize text, then add each token to index with document ID
         # Add full text to docmap by doc_id
@@ -54,6 +55,16 @@ class InvertedIndex:
             term_freq[token] += 1
         self.term_frequencies[doc_id] = term_freq
 
+    # Get BM25 IDF for a given term
+    def get_bm25_idf(self, term: str) -> float:
+        # log((N - df + 0.5) / (df + 0.5) + 1)
+        doc_count = len(self.docmap)
+        term_docs = self.get_documents(term)
+        df = len(term_docs)
+        idf = math.log((doc_count - df + 0.5) / (df + 0.5) + 1)
+        return idf
+
+    # Get list of document IDs for a given term
     def get_documents(self, term: str) -> List[int]:
         # Set the document ID for a given token
         # return as a list sorted in asc order
@@ -62,6 +73,7 @@ class InvertedIndex:
             return []
         return sorted(doc_id_list)
     
+    # Get term frequency for a given document ID and term
     def get_tf(self, doc_id, term) -> int:
         tokens = term.split()
         if len(tokens) > 1:
@@ -69,6 +81,7 @@ class InvertedIndex:
         term_freq = self.term_frequencies[doc_id]
         return term_freq[term]
     
+    # Get inverse document frequency for a given term
     def get_idf(self, term) -> float:
         documents = self.get_documents(term)
         idf = math.log((len(self.docmap) + 1) / (len(documents) + 1))
@@ -136,6 +149,9 @@ def main() -> None:
     tfidf_parser.add_argument("doc_id", type=int, help="Document id")
     tfidf_parser.add_argument("term", type=str, help="Lookup term")
 
+    bm25_idf_parser = subparsers.add_parser("bm25idf", help="Get BM25 IDF score for a given term")
+    bm25_idf_parser.add_argument("term", type=str, help="Term to get BM25 IDF score for")
+
     # Create an instance of InvertedIndex
     ii = InvertedIndex()
 
@@ -154,8 +170,11 @@ def main() -> None:
         term = args.term.lower()
         term = stemmer.stem(term)
 
-    if args.doc_id is not None:
+    try:
         doc_id = args.doc_id
+    except:
+        # do nothing
+        pass
 
     match args.command:
         case "search":
@@ -174,8 +193,6 @@ def main() -> None:
                             break
                         result_list.append((doc_id, ii.docmap[doc_id]))
                         print((doc_id, ii.docmap[doc_id]))
-
-                    # print(result_list)
                 except Exception as e:
                     print(f"No results found for token '{token}'")
         case "tf":
@@ -191,6 +208,9 @@ def main() -> None:
             print(f"Inverse document frequency of '{term}': {idf:.2f}")
             tf_idf = tf * idf
             print(f"TF-IDF score of '{term}' in document '{doc_id}': {tf_idf:.2f}")
+        case "bm25idf":
+            bm25idf = ii.get_bm25_idf(term)
+            print(f"BM25 IDF score of '{args.term}': {bm25idf:.2f}")
         case "build":
             ii.build()
         case _:
