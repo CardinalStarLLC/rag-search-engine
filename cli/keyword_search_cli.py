@@ -1,138 +1,8 @@
 #!/usr/bin/env python3
 
 import argparse
-import json
-import math
-import string
-from nltk.stem import PorterStemmer
-# imports for InvertedIndex
-from typing import List, Dict, Any, Set, Iterable
-from collections import Counter, defaultdict
-import pickle
-import os
-
-BM25_K1 = 1.5
-stemmer = PorterStemmer()
-
-def load_stop_words():
-    global stop_words_list
-    with open('data/stopwords.txt', 'r') as file:
-        stop_words_list = file.read().splitlines()
-        return stop_words_list
-
-def tokenize(text: str):
-    translation_table = str.maketrans("", "", string.punctuation)
-
-    tokens = text.lower().translate(translation_table).split()
-    valid_tokens = []
-    for token in tokens:
-        if token in stop_words_list:
-            continue
-        stem_word = stemmer.stem(token)
-        valid_tokens.append(stem_word)
-    return valid_tokens
-
-class InvertedIndex:
-    def __init__(self) -> None:
-        self.index = defaultdict(set)
-        self.docmap: Dict[int, Any] = {}
-        self.term_frequencies: Dict[int, Counter] = {}
-
-    # Add a document to the index
-    def __add_document(self, doc_id: int, text: str) -> None:
-        # Tokenize text, then add each token to index with document ID
-        # Add full text to docmap by doc_id
-        self.docmap[doc_id] = text
-
-        # tokenize
-        tokens = tokenize(text)
-
-        # Add tokens to index
-        # Also build term frequencies
-        term_freq = Counter()
-        
-        for token in tokens:
-            self.index[token].add(doc_id)
-            term_freq[token] += 1
-        self.term_frequencies[doc_id] = term_freq
-
-    # Get BM25 IDF for a given term
-    def get_bm25_idf(self, term: str) -> float:
-        # log((N - df + 0.5) / (df + 0.5) + 1)
-        doc_count = len(self.docmap)
-        term_docs = self.get_documents(term)
-        df = len(term_docs)
-        idf = math.log((doc_count - df + 0.5) / (df + 0.5) + 1)
-        return idf
-    
-    def get_bm25_tf(self, doc_id, term, k1=BM25_K1):
-        tf = self.get_tf(doc_id, term)
-        bm25_tf = (tf * (k1 + 1)) / (tf + k1)
-        return bm25_tf
-
-    # Get list of document IDs for a given term
-    def get_documents(self, term: str) -> List[int]:
-        # Set the document ID for a given token
-        # return as a list sorted in asc order
-        doc_id_list = self.index.get(term.lower())
-        if doc_id_list is None:
-            return []
-        return sorted(doc_id_list)
-    
-    # Get term frequency for a given document ID and term
-    def get_tf(self, doc_id, term) -> int:
-        tokens = term.split()
-        if len(tokens) > 1:
-            raise ValueError("Only one word allowed for the parameter 'term'")
-        term_freq = self.term_frequencies[doc_id]
-        return term_freq[term]
-    
-    # Get inverse document frequency for a given term
-    def get_idf(self, term) -> float:
-        documents = self.get_documents(term)
-        idf = math.log((len(self.docmap) + 1) / (len(documents) + 1))
-        return idf
-
-    def build(self) -> None:
-        # Iterate over all movies and add them to both index and docmap
-        with open('data/movies.json', 'r') as file:
-            data = json.load(file)
-            #data = sorted(data['movies'], key=lambda k: k['id'])
-
-            for m in data['movies']:
-                concat = f"{m['title']} {m['description']}"
-                self.__add_document(int(m['id']), concat)
-
-            self.save()
-
-    def save(self):
-        # Save to disk using pickle.dump
-        # Create cache folder if it doesn't exist in data/cache
-        # cache/index.pkl
-        # cache/docmap.pkl
-        # create folder if it doesn't exist
-        os.makedirs('cache', exist_ok=True)
-
-        # Store data (serialize)
-        with open('cache/index.pkl', 'wb') as handle:
-            pickle.dump(self.index, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        with open('cache/docmap.pkl', 'wb') as handle:
-            pickle.dump(self.docmap, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        with open('cache/term_frequencies.pkl', 'wb') as handle:
-            pickle.dump(self.term_frequencies, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-    def load(self):
-        # load using picke.load
-        try:
-            with open('cache/index.pkl', 'rb') as handle:
-                self.index = pickle.load(handle)
-            with open('cache/docmap.pkl', 'rb') as handle:
-                self.docmap = pickle.load(handle)
-            with open('cache/term_frequencies.pkl', 'rb') as handle:
-                self.term_frequencies = pickle.load(handle)
-        except Exception as e:
-            print(e)
-    pass
+from inverted_index import InvertedIndex
+from search_utils import *
 
 def main() -> None:
     
@@ -164,6 +34,7 @@ def main() -> None:
     bm25_tf_parser.add_argument("doc_id", type=int, help="Document ID")
     bm25_tf_parser.add_argument("term", type=str, help="Term to get BM25 TF score for")
     bm25_tf_parser.add_argument("k1", type=float, nargs='?', default=BM25_K1, help="Tunable BM25 K1 parameter")
+    bm25_tf_parser.add_argument("b", type=float, nargs='?', default=BM25_B, help="Tunable BM25 b parameter")
 
     # Create an instance of InvertedIndex
     ii = InvertedIndex()
@@ -197,7 +68,6 @@ def main() -> None:
             # print the search query here
             print("Searching for: " + args.query)
 
-            max_results = 5
 
             search_tokens = tokenize(args.query)
             print(f"Search tokens: {search_tokens}")
@@ -205,7 +75,7 @@ def main() -> None:
             for token in search_tokens:
                 try:
                     for doc_id in ii.get_documents(token):
-                        if len(result_list) >= max_results:
+                        if len(result_list) >= MAX_SEARCH_RESULTS:
                             break
                         result_list.append((doc_id, ii.docmap[doc_id]))
                         print((doc_id, ii.docmap[doc_id]))
