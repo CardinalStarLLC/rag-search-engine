@@ -1,5 +1,7 @@
+import json
 import string
 from nltk.stem import PorterStemmer
+from typing import Dict
 
 stemmer = PorterStemmer()
 
@@ -12,6 +14,16 @@ def load_stop_words():
     with open('data/stopwords.txt', 'r') as file:
         stop_words_list = file.read().splitlines()
         return stop_words_list
+    
+def load_movie_data() -> Dict[int, str]:
+    movie_dict: Dict[int, str] = {}
+    with open('data/movies.json', 'r') as file:
+        data = json.load(file)
+
+    for m in data['movies']:
+        movie_dict[int(m['id'])] = m['title']
+    
+    return movie_dict
 
 def tokenize(text: str):
     translation_table = str.maketrans("", "", string.punctuation)

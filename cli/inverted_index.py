@@ -4,15 +4,19 @@ import os
 import pickle
 from collections import Counter, defaultdict
 from search_utils import *
-from typing import List, Dict, Any, Set, Iterable
+from typing import List, Dict
 
 CACHE_DIR = 'cache'
 
 class InvertedIndex:
     def __init__(self) -> None:
-        self.index = defaultdict(set)
+        # token to doc_id
+        self.index: Dict[str, set] = {}
+        # doc_id to doc text
         self.docmap: Dict[int, str] = {}
+        # doc_id to token frequencies
         self.term_frequencies: Dict[int, Counter] = {}
+        # doc_id to doc length
         self.doc_lengths: Dict[int, int] = {}
         self.index_path = os.path.join(CACHE_DIR, "index.pkl")
         self.docmap_path = os.path.join(CACHE_DIR, "docmap.pkl")
@@ -48,8 +52,32 @@ class InvertedIndex:
         doc_length_sum = 0
         for doc_id in self.doc_lengths:
             doc_length_sum += self.doc_lengths[doc_id]
-        print (f"Total Document Length Sum: {doc_length_sum}, Document Count: {doc_count}")
-        return round(doc_length_sum / doc_count, 2)
+        # print (f"Total Document Length Sum: {doc_length_sum}, Document Count: {doc_count}")
+        # Return full precision average document length (avoid premature rounding)
+        return doc_length_sum / doc_count
+
+    def bm25(self, doc_id, term) -> float:
+        tf = self.get_bm25_tf(doc_id, term)
+        idf = self.get_bm25_idf(term)
+        bm25_score = tf * idf
+        # print(f"BM25 Score: {bm25_score}")
+        return bm25_score
+
+    def bm25_search(self, query, limit):
+        tokens = tokenize(query)
+        # map doc_id to BM25 score
+        scores: Dict[int, float] = {}
+        for token in tokens:
+            doc_ids = self.index[token]
+            for doc_id in doc_ids:
+                doc_score = self.bm25(doc_id, token)
+                if scores.get(doc_id) is None:
+                    scores[doc_id] = 0.00
+                scores[doc_id] += doc_score
+        scores = sorted(scores.items(), key = lambda k: k[1], reverse=True)
+        movie_dict = load_movie_data()
+        for score in scores[:limit]:
+            print(f"({score[0]}) {movie_dict[score[0]]} - Score: {score[1]:.2f}")
 
     # Get BM25 IDF for a given term
     def get_bm25_idf(self, term: str) -> float:
@@ -65,10 +93,9 @@ class InvertedIndex:
         avg_doc_length = self.__get_avg_doc_length()
         tf = self.get_tf(doc_id, term)
         # Length normalization factor
-        length_norm = round(1 - b + b * (doc_length / avg_doc_length), 2)
-        bm25_tf = round((tf * (k1 + 1)) / (tf + k1 * length_norm), 2)
-        print(f"BM25 TF: {bm25_tf}")
-
+        length_norm = 1 - b + b * (doc_length / avg_doc_length)
+        bm25_tf = (tf * (k1 + 1)) / (tf + k1 * length_norm)
+        
         return bm25_tf
 
     # Get list of document IDs for a given term
@@ -133,16 +160,16 @@ class InvertedIndex:
         try:
             with open(self.index_path, 'rb') as handle:
                 self.index = pickle.load(handle)
-                print(f"Loaded {self.index_path}")
+                # print(f"Loaded {self.index_path}")
             with open(self.docmap_path, 'rb') as handle:
                 self.docmap = pickle.load(handle)
-                print(f"Loaded {self.docmap_path}")
+                # print(f"Loaded {self.docmap_path}")
             with open(self.term_frequencies_path, 'rb') as handle:
                 self.term_frequencies = pickle.load(handle)
-                print(f"Loaded {self.term_frequencies_path}")
+                # print(f"Loaded {self.term_frequencies_path}")
             with open(self.doc_lengths_path, 'rb') as handle:
                 self.doc_lengths = pickle.load(handle)
-                print(f"Loaded {self.doc_lengths_path}")
+                # print(f"Loaded {self.doc_lengths_path}")
         except Exception as e:
             print(e)
     pass
