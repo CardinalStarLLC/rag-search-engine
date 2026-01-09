@@ -2,8 +2,8 @@ import json
 import math
 import os
 import pickle
-from collections import Counter, defaultdict
-from search_utils import *
+from collections import Counter
+from lib.search_utils import *
 from typing import List, Dict
 
 CACHE_DIR = 'cache'

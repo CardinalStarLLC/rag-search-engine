@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
 import argparse
-from inverted_index import InvertedIndex
-from search_utils import *
+from lib.inverted_index import InvertedIndex
+from lib.search_utils import *
 
 def main() -> None:
     
