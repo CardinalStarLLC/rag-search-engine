@@ -3,6 +3,16 @@ import os
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
+def cosine_similarity(vec1, vec2):
+    dot_product = np.dot(vec1, vec2)
+    norm1 = np.linalg.norm(vec1)
+    norm2 = np.linalg.norm(vec2)
+
+    if norm1 == 0 or norm2 == 0:
+        return 0.0
+
+    return dot_product / (norm1 * norm2)
+
 def embed_text(text):
     sm = SemanticSearch()
     embedding = sm.generate_embedding(text)
@@ -18,10 +28,14 @@ def embed_query_text(query):
     print(f"First 5 dimensions: {embedding[:5]}")
     print(f"Shape: {embedding.shape}")
 
+def open_json_file(file_path):
+    with open(file_path, 'r') as file:
+        data = json.load(file)
+    return data
+
 def verify_embeddings():
     sm = SemanticSearch()
-    with open('data/movies.json', 'r') as file:
-        data = json.load(file)
+    data = open_json_file('data/movies.json')
     sm.load_or_create_embeddings(data['movies'])
 
     print(f"Number of docs:   {len(sm.documents)}")
@@ -69,6 +83,20 @@ class SemanticSearch:
             self.build_embeddings(documents)
         else:
             return self.embeddings
+        
+    def search(self, query, limit):
+        if self.embeddings is None or self.documents is None:
+            raise ValueError("Embeddings and documents must be loaded before searching.")
+        
+        query_embedding = self.generate_embedding(query)
+        similarities = []
+
+        for idx, doc_embedding in enumerate(self.embeddings):
+            similarity = cosine_similarity(query_embedding, doc_embedding)
+            similarities.append((similarity, self.documents[idx]))
+
+        similarities.sort(key=lambda x: x[0], reverse=True)
+        return similarities[:limit] 
 
     def verify_model(self) -> None:
         print(f"Model loaded: {self.model}")

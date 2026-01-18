@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+from pydoc import doc
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Semantic Search CLI")
@@ -15,6 +16,10 @@ def main() -> None:
 
     embed_query = subparsers.add_parser("embedquery", help="Verify query information")
     embed_query.add_argument("query", type=str, help="Query text")
+
+    search = subparsers.add_parser("search", help="Search for similar documents")   
+    search.add_argument("query", type=str, help="Query text")
+    search.add_argument("--limit", type=int, default=5, help="Number of results to return")
 
     args = parser.parse_args()
 
@@ -32,6 +37,17 @@ def main() -> None:
         case "embedquery":
             from lib.semantic_search import embed_query_text
             embed_query_text(args.query)
+        case "search":
+            from lib.semantic_search import SemanticSearch
+            from lib.semantic_search import open_json_file
+
+            sm = SemanticSearch()
+            movies_path = 'data/movies.json'
+            movies_data = open_json_file(movies_path)
+            sm.load_or_create_embeddings(movies_data['movies'])
+            results = sm.search(args.query, args.limit)
+            for score, doc in results:
+                print(f"{doc['title']} (score: {score:.4f})\n  {doc['description']}\n")
         case _:
             parser.print_help()
 
