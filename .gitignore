@@ -3,4 +3,4 @@ uv.lock
 cache/
 cli_csharp/bin/
 cli_csharp/obj/
-*/__pycache__/
+*/__pycache__/*

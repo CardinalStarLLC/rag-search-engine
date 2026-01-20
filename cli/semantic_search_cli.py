@@ -21,9 +21,23 @@ def main() -> None:
     search.add_argument("query", type=str, help="Query text")
     search.add_argument("--limit", type=int, default=5, help="Number of results to return")
 
+    chunk = subparsers.add_parser("chunk", help="Chunk text for processing")
+    chunk.add_argument("text", type=str, help="Text to chunk")
+    chunk.add_argument("--chunk-size", type=int, default=200, help="Size of each chunk")
+
     args = parser.parse_args()
 
     match args.command:
+        case "chunk":
+            separator = " "
+            tokens = args.text.split()
+            print(f"Chunking {len(separator.join(tokens))} characters")
+            chunk_count = 1
+            for chunk in range(args.chunk_size, len(tokens), args.chunk_size):
+                print(f"{chunk_count}. {separator.join(tokens[chunk - args.chunk_size:chunk])}")
+                chunk_count += 1
+            print(f"{chunk_count}. {separator.join(tokens[(chunk_count - 1) * args.chunk_size:len(tokens)])}")
+
         case "embed_text":
             from lib.semantic_search import embed_text
             embed_text(args.text)
