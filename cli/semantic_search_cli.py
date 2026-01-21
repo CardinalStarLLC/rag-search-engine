@@ -24,6 +24,7 @@ def main() -> None:
     chunk = subparsers.add_parser("chunk", help="Chunk text for processing")
     chunk.add_argument("text", type=str, help="Text to chunk")
     chunk.add_argument("--chunk-size", type=int, default=200, help="Size of each chunk")
+    chunk.add_argument("--overlap", type=int, default=0, help="Overlap between chunks")
 
     args = parser.parse_args()
 
@@ -32,11 +33,19 @@ def main() -> None:
             separator = " "
             tokens = args.text.split()
             print(f"Chunking {len(separator.join(tokens))} characters")
+
+            chunk_size = args.chunk_size
+            overlap = args.overlap
+
             chunk_count = 1
             for chunk in range(args.chunk_size, len(tokens), args.chunk_size):
-                print(f"{chunk_count}. {separator.join(tokens[chunk - args.chunk_size:chunk])}")
+                if chunk_count <= 1:
+                    print(f"{chunk_count}. {separator.join(tokens[chunk - args.chunk_size:chunk])}")
+                else:
+                    print(f"{chunk_count}. {separator.join(tokens[((chunk_count - 1) * args.chunk_size) - overlap:chunk])}")
                 chunk_count += 1
-            print(f"{chunk_count}. {separator.join(tokens[(chunk_count - 1) * args.chunk_size:len(tokens)])}")
+
+            print(f"{chunk_count}. {separator.join(tokens[((chunk_count - 1) * args.chunk_size) - overlap:len(tokens)])}")
 
         case "embed_text":
             from lib.semantic_search import embed_text

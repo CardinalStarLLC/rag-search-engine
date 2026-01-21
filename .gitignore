@@ -1,6 +1,5 @@
 data/
 uv.lock
 cache/
-cli_csharp/bin/
-cli_csharp/obj/
-*/__pycache__/*
+cli_csharp/*
+**/__pycache__/*
