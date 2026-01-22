@@ -2,6 +2,7 @@
 
 import argparse
 from pydoc import doc
+import re
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Semantic Search CLI")
@@ -26,6 +27,11 @@ def main() -> None:
     chunk.add_argument("--chunk-size", type=int, default=200, help="Size of each chunk")
     chunk.add_argument("--overlap", type=int, default=0, help="Overlap between chunks")
 
+    semantic_chunk = subparsers.add_parser("semantic_chunk", help="Chunk text for processing")
+    semantic_chunk.add_argument("text", type=str, help="Text to chunk")
+    semantic_chunk.add_argument("--max-chunk-size", type=int, default=4, help="Max ize of each chunk")
+    semantic_chunk.add_argument("--overlap", type=int, default=0, help="Overlap between chunks")
+
     args = parser.parse_args()
 
     match args.command:
@@ -38,14 +44,14 @@ def main() -> None:
             overlap = args.overlap
 
             chunk_count = 1
-            for chunk in range(args.chunk_size, len(tokens), args.chunk_size):
+            for chunk in range(chunk_size, len(tokens), chunk_size):
                 if chunk_count <= 1:
-                    print(f"{chunk_count}. {separator.join(tokens[chunk - args.chunk_size:chunk])}")
+                    print(f"{chunk_count}. {separator.join(tokens[chunk - chunk_size:chunk])}")
                 else:
-                    print(f"{chunk_count}. {separator.join(tokens[((chunk_count - 1) * args.chunk_size) - overlap:chunk])}")
+                    print(f"{chunk_count}. {separator.join(tokens[((chunk_count - 1) * chunk_size) - overlap:chunk])}")
                 chunk_count += 1
 
-            print(f"{chunk_count}. {separator.join(tokens[((chunk_count - 1) * args.chunk_size) - overlap:len(tokens)])}")
+            print(f"{chunk_count}. {separator.join(tokens[((chunk_count - 1) * chunk_size) - overlap:len(tokens)])}")
 
         case "embed_text":
             from lib.semantic_search import embed_text
@@ -71,6 +77,28 @@ def main() -> None:
             results = sm.search(args.query, args.limit)
             for score, doc in results:
                 print(f"{doc['title']} (score: {score:.4f})\n  {doc['description']}\n")
+
+        case "semantic_chunk":
+            max_chunk_size = args.max_chunk_size
+            overlap = args.overlap
+            
+            separator = " "
+            sentences = re.split(r"(?<=[.!?])\s+", args.text)
+            
+            print(f"Semantically chunking {len(separator.join(sentences))} characters")
+            
+            chunk_count = 1
+            index = 0
+            
+            while index <= len(sentences):
+                print(f"{chunk_count}. {separator.join(sentences[index:index + max_chunk_size])}")
+                chunk_count += 1
+                index += max_chunk_size
+                if (index >= len(sentences)):
+                    break
+
+                index -= overlap
+                pass
         case _:
             parser.print_help()
 
