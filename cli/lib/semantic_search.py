@@ -28,12 +28,10 @@ def embed_query_text(query):
     print(f"First 5 dimensions: {embedding[:5]}")
     print(f"Shape: {embedding.shape}")
 
-def open_json_file(file_path):
-    with open(file_path, 'r') as file:
-        data = json.load(file)
-    return data
-
 def verify_embeddings():
+    from lib.search_utils import open_json_file
+    from lib.chunked_semantic_search import ChunkedSemanticSearch
+
     sm = SemanticSearch()
     data = open_json_file('data/movies.json')
     sm.load_or_create_embeddings(data['movies'])
@@ -42,9 +40,9 @@ def verify_embeddings():
     print(f"Embeddings shape: {sm.embeddings.shape[0]} vectors in {sm.embeddings.shape[1]} dimensions")
 
 class SemanticSearch:
-    def __init__(self) -> None:
+    def __init__(self, model_name='all-MiniLM-L6-v2') -> None:
         # Load the model (downloads automatically the first time)
-        self.model = SentenceTransformer('all-MiniLM-L6-v2')
+        self.model = SentenceTransformer(model_name)
         self.embeddings = None
         self.documents = None
         self.document_map = {}
