@@ -1,9 +1,16 @@
 import json
+import numpy as np
 import os
 from typing import List
-
 from lib.semantic_search import SemanticSearch
-import numpy as np
+from lib.search_utils import (
+    DEFAULT_SEMANTIC_CHUNK_SIZE,
+    DEFAULT_CHUNK_OVERLAP,
+    load_movies,
+    open_json_file,
+    semantic_chunk,
+)
+
 
 class ChunkedSemanticSearch(SemanticSearch):
     def __init__(self, model_name = "all-MiniLM-L6-v2") -> None:
@@ -14,6 +21,16 @@ class ChunkedSemanticSearch(SemanticSearch):
         self.documents = None
         self.document_map = {}
     
+    def __cosine_similarity_score__(self, query_embedding, chunk_embedding):
+        dot_product = np.dot(query_embedding, chunk_embedding)
+        magnitude_query = np.linalg.norm(query_embedding)
+        magnitude_chunk = np.linalg.norm(chunk_embedding)
+
+        if (magnitude_chunk == 0 or magnitude_query == 0):
+            return 0
+
+        return dot_product / (magnitude_query * magnitude_chunk)
+
     def __populate_docs_and_doc_map__(self, documents):
         self.documents = documents
         movies = []
@@ -22,27 +39,26 @@ class ChunkedSemanticSearch(SemanticSearch):
             movies.append(f"{doc['title']}: {doc['description']}")
 
     def build_chunk_embeddings(self, documents):
-        from lib.search_utils import semantic_chunk
-
         self.__populate_docs_and_doc_map__(documents)
 
         chunks: List[str] = []
         chunk_metadata = []
 
-        for doc in documents:
+        chunk_idx = 0
+        for doc_index, doc in enumerate(documents):
             if doc is None:
                 continue
-            sentence_chunks = semantic_chunk(doc['description'], 4, 1)
+            sentence_chunks = semantic_chunk(doc['description'], DEFAULT_SEMANTIC_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP)
 
-            index = 0
             for chunk in sentence_chunks:
                 chunks.append(chunk)
-                data = { 'movie_idx': doc['id'], 'chunk_idx': index, 'total_chunks': len(sentence_chunks) }
+                data = { 'movie_idx': doc_index, 'chunk_idx': chunk_idx, 'total_chunks': len(sentence_chunks) }
                 chunk_metadata.append(data)
+                print(f"index: {chunk_idx} chunk: {chunk}")
 
-                index += 1
+                chunk_idx += 1
 
-        self.chunk_embeddings = self.model.encode(chunks)
+        self.chunk_embeddings = self.model.encode(chunks, show_progress_bar=True, convert_to_tensor=True, device='cuda', batch_size=256)
         self.chunk_metadata = chunk_metadata
 
         with open('cache/chunk_embeddings.npy', 'wb') as file:
@@ -54,16 +70,13 @@ class ChunkedSemanticSearch(SemanticSearch):
         return self.chunk_embeddings
         
     def load_or_create_chunk_embeddings(self, documents: list[dict]) -> np.ndarray:
-        from lib.search_utils import open_json_file
         self.__populate_docs_and_doc_map__(documents)
 
         if os.path.isfile('cache/chunk_embeddings.npy'):
             with open('cache/chunk_embeddings.npy', 'rb') as file:
-                print("Loading chunk_embeddings")
                 self.chunk_embeddings = np.load(file)
 
         if os.path.isfile('cache/chunk_metadata.json'):
-            print("Loading chunk_metadata")
             self.chunk_metadata = open_json_file('cache/chunk_metadata.json')
 
         if ((self.chunk_embeddings is None or len(self.chunk_embeddings) <= 0)
@@ -71,3 +84,20 @@ class ChunkedSemanticSearch(SemanticSearch):
             return self.build_chunk_embeddings(documents)
         else:
             return self.chunk_embeddings
+        
+    def search_chunks(self, query: str, limit: int = 10):
+        query_embedding = self.generate_embedding(query)
+        # print(query_embedding)
+        chunk_score = [dict]
+
+        movie_data = load_movies()
+        chunk_embeddings = self.load_or_create_chunk_embeddings(movie_data)
+        # print(f"Documents {self.documents}")
+        # print(f"Movie metadata {self.chunk_metadata}")
+
+        for i, chunk_embedding in enumerate(chunk_embeddings):
+            score = self.__cosine_similarity_score__(chunk_embedding, query_embedding)
+            chunk_score.append({ "chunk_idx": i, "movie_idx": "", "score": score})
+            # print(f"chunk_embedding {chunk_embedding}")
+            # print(f"chunk_idx: {i}, movie_idx: {0}, score: {score}")
+            pass
