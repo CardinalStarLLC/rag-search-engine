@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import argparse
-import torch
 from lib.chunked_semantic_search import ChunkedSemanticSearch
 from lib.search_utils import (
     load_movies,
@@ -51,10 +50,6 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    print(torch.__version__)
-    print(torch.cuda.is_available())  # Likely returns False
-    print(torch.version.cuda)         # Likely returns None
-
     match args.command:
         case "chunk":
             separator = " "
@@ -103,8 +98,10 @@ def main() -> None:
             css.load_or_create_chunk_embeddings(movies_data)
             results = css.search_chunks(args.query, args.limit)
 
-            # print(f"\n{i}. {TITLE} (score: {SCORE:.4f})")
-            # print(f"   {DESCRIPTION}...")
+            for i, result in enumerate(results):
+                score = result['score']
+                print(f"\n{i+1}. {result['title']} (score: {score:.4f})")
+                print(f"   {result['document']}...")
         case "semantic_chunk":
             chunk_list = semantic_chunk(args.text, args.max_chunk_size, args.overlap)
             sentences = split_text_to_sentences(args.text)

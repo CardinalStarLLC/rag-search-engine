@@ -4,11 +4,12 @@ import string
 from nltk.stem import PorterStemmer
 from typing import Dict, List
 
-DEFAULT_SEMANTIC_CHUNK_SIZE = 4
-DEFAULT_CHUNK_OVERLAP = 1
-MAX_SEARCH_RESULTS = 5
 BM25_B = 0.75
 BM25_K1 = 1.5
+DEFAULT_CHUNK_OVERLAP = 1
+DEFAULT_SEMANTIC_CHUNK_SIZE = 4
+MAX_SEARCH_RESULTS = 5
+SCORE_PRECISION = 4
 
 stemmer = PorterStemmer()
 

@@ -1,11 +1,12 @@
 import json
 import numpy as np
 import os
-from typing import List
+from typing import Dict, List
 from lib.semantic_search import SemanticSearch
 from lib.search_utils import (
     DEFAULT_SEMANTIC_CHUNK_SIZE,
     DEFAULT_CHUNK_OVERLAP,
+    SCORE_PRECISION,
     load_movies,
     open_json_file,
     semantic_chunk,
@@ -52,13 +53,12 @@ class ChunkedSemanticSearch(SemanticSearch):
 
             for chunk in sentence_chunks:
                 chunks.append(chunk)
-                data = { 'movie_idx': doc_index, 'chunk_idx': chunk_idx, 'total_chunks': len(sentence_chunks) }
+                data = { 'movie_idx': doc_index + 1, 'chunk_idx': chunk_idx, 'total_chunks': len(sentence_chunks) }
                 chunk_metadata.append(data)
-                print(f"index: {chunk_idx} chunk: {chunk}")
 
                 chunk_idx += 1
 
-        self.chunk_embeddings = self.model.encode(chunks, show_progress_bar=True, convert_to_tensor=True, device='cuda', batch_size=256)
+        self.chunk_embeddings = self.model.encode(chunks, show_progress_bar=True, device='cuda', batch_size=256)
         self.chunk_metadata = chunk_metadata
 
         with open('cache/chunk_embeddings.npy', 'wb') as file:
@@ -87,17 +87,41 @@ class ChunkedSemanticSearch(SemanticSearch):
         
     def search_chunks(self, query: str, limit: int = 10):
         query_embedding = self.generate_embedding(query)
-        # print(query_embedding)
-        chunk_score = [dict]
-
+        chunk_score: dict = []
+        movie_score: Dict[int, float] = {}
         movie_data = load_movies()
         chunk_embeddings = self.load_or_create_chunk_embeddings(movie_data)
-        # print(f"Documents {self.documents}")
-        # print(f"Movie metadata {self.chunk_metadata}")
-
+        chunk_by_idx = {c["chunk_idx"]: c for c in self.chunk_metadata["chunks"]}
+        
         for i, chunk_embedding in enumerate(chunk_embeddings):
             score = self.__cosine_similarity_score__(chunk_embedding, query_embedding)
-            chunk_score.append({ "chunk_idx": i, "movie_idx": "", "score": score})
-            # print(f"chunk_embedding {chunk_embedding}")
-            # print(f"chunk_idx: {i}, movie_idx: {0}, score: {score}")
-            pass
+            movie_idx = chunk_by_idx.get(i)['movie_idx']
+            chunk_score.append({ "chunk_idx": i, "movie_idx": movie_idx, "score": score})
+
+            # if movie score doesn't exist or score higher than stored, upsert with new chunk score
+            if movie_score.get(movie_idx) is None or movie_score.get(movie_idx) < score:
+                movie_score[movie_idx] = score
+
+        chunk_by_movie = {c["movie_idx"]: c for c in self.chunk_metadata["chunks"]}
+        movie_score = sorted(movie_score.items(), key = lambda k: k[1], reverse=True)
+        top_movies: dict = []
+        for ms in movie_score[:limit]:
+            doc = self.document_map.get(ms[0])
+            metadata = chunk_by_movie.get(ms[0])
+            top_movies.append({ 
+                "id": doc['id'], 
+                "title": doc['title'], 
+                "document": doc['description'][:100], 
+                "score": round(ms[1], SCORE_PRECISION), 
+                "metadata": metadata or {} 
+            })
+
+        return top_movies
+
+#         {
+#   "id": doc_id,
+#   "title": title,
+#   "document": document[:100],
+#   "score": round(score, SCORE_PRECISION),
+#   "metadata": metadata or {}
+# }
