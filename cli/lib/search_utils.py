@@ -58,7 +58,7 @@ def semantic_chunk(text: str, max_chunk_size: int, overlap: int = 0) -> List[str
     index = 0
     
     while index <= len(sentences):
-        chunks.append(separator.join(sentences[index:index + max_chunk_size]))
+        chunks.append(separator.join(s.strip() for s in sentences[index:index + max_chunk_size] if s.strip()))
         index += max_chunk_size
         if (index >= len(sentences)):
             break
@@ -68,4 +68,8 @@ def semantic_chunk(text: str, max_chunk_size: int, overlap: int = 0) -> List[str
     return chunks
 
 def split_text_to_sentences(text: str) -> List[str]:
-    return re.split(r"(?<=[.!?])\s+", text)
+    text = text.strip()
+    if len(text) == 0:
+        return []
+    sentences = re.split(r"(?<=[.!?])\s+", text)
+    return sentences
