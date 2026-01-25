@@ -4,11 +4,14 @@ import string
 from nltk.stem import PorterStemmer
 from typing import Dict, List
 
-stemmer = PorterStemmer()
-
-MAX_SEARCH_RESULTS = 5
 BM25_B = 0.75
 BM25_K1 = 1.5
+DEFAULT_CHUNK_OVERLAP = 1
+DEFAULT_SEMANTIC_CHUNK_SIZE = 4
+MAX_SEARCH_RESULTS = 5
+SCORE_PRECISION = 4
+
+stemmer = PorterStemmer()
 
 def load_stop_words():
     global stop_words_list
@@ -25,6 +28,10 @@ def load_movie_data() -> Dict[int, str]:
         movie_dict[int(m['id'])] = m['title']
     
     return movie_dict
+
+def load_movies():
+    data = open_json_file('data/movies.json')
+    return data['movies']
 
 def open_json_file(file_path):
     with open(file_path, 'r') as file:

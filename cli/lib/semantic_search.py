@@ -1,7 +1,8 @@
-import json
 import os
 import numpy as np
 from sentence_transformers import SentenceTransformer
+from lib.search_utils import open_json_file
+
 
 def cosine_similarity(vec1, vec2):
     dot_product = np.dot(vec1, vec2)
@@ -29,9 +30,6 @@ def embed_query_text(query):
     print(f"Shape: {embedding.shape}")
 
 def verify_embeddings():
-    from lib.search_utils import open_json_file
-    from lib.chunked_semantic_search import ChunkedSemanticSearch
-
     sm = SemanticSearch()
     data = open_json_file('data/movies.json')
     sm.load_or_create_embeddings(data['movies'])
